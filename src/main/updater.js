@@ -11,6 +11,7 @@ const store = require('./store');
 const pkg = require('../../package.json');
 
 const DEFAULT_URL = pkg.updateUrl || 'https://active.mrhuynh.net/gcloudhub/v1/app/version';
+const DEFAULT_GUIDE = 'https://mrhuynh.net/tools';
 const baseUrl = () => store.get().settings.updateUrl || DEFAULT_URL;
 
 // Mã máy ẩn danh (uuid) để máy chủ đếm số lượt dùng — KHÔNG chứa thông tin cá nhân nào.
@@ -51,9 +52,23 @@ async function fetchInfo() {
   return m || {};
 }
 
+// Link video hướng dẫn (YouTube) do bạn đặt ở trang quản trị — trả về trong cùng phản hồi version.
+function guideUrlCached() { return store.get().settings.guideUrl || DEFAULT_GUIDE; }
+async function guide() {
+  try {
+    const m = await fetchInfo();
+    if (m && typeof m.guide_url === 'string' && /^https?:\/\//.test(m.guide_url)) {
+      const s = store.get().settings; s.guideUrl = m.guide_url; store.save();
+    }
+  } catch {}
+  return guideUrlCached();
+}
+
 async function check() {
   const m = await fetchInfo();
-  const s = store.get().settings; s.lastUpdateCheck = Date.now(); store.save();
+  const s = store.get().settings; s.lastUpdateCheck = Date.now();
+  if (m && typeof m.guide_url === 'string' && /^https?:\/\//.test(m.guide_url)) s.guideUrl = m.guide_url;
+  store.save();
   const latest = m.version || '0.0.0';
   return {
     current: pkg.version,
@@ -116,4 +131,4 @@ function install() {
 
 function updateUrl() { return baseUrl(); }
 
-module.exports = { check, download, install, updateUrl, isPortable };
+module.exports = { check, download, install, updateUrl, isPortable, guide, guideUrlCached };

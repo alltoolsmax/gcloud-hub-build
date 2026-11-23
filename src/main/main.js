@@ -219,6 +219,7 @@ const handlers = {
   'update:check': () => updater.check(),
   'update:download': () => updater.download(),
   'update:install': () => updater.install(),
+  'guide:url': () => updater.guide(),
   'update:info': () => ({ url: updater.updateUrl(), portable: updater.isPortable(), version: pkg.version, last: store.get().settings.lastUpdateCheck || 0 }),
   'drive:newFolder': (wcId, name) => google.newFolderVisible(webContents.fromId(wcId), name),
   'photos:upload': (id, files) => google.uploadToPhotos(id, files),
