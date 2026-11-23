@@ -1,7 +1,7 @@
 {
   "name": "gcloud-hub",
   "productName": "GCloud Hub",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Quản lý nhiều Gmail, Google Drive, Gemini và Google Search trong một ứng dụng",
   "main": "src/main/main.js",
   "author": "GCloud Hub",
@@ -40,7 +40,7 @@
     },
     "portable": {
       "artifactName": "GCloudHub-Portable-${version}.exe",
-      "unpackDirName": "GCloudHubFresh102",
+      "unpackDirName": "GCloudHubFresh103",
       "requestExecutionLevel": "user"
     },
     "mac": {
@@ -79,5 +79,5 @@
     "electron": "^45.4.1",
     "electron-builder": "^26.18.0"
   },
-  "updateUrl": "https://mrhuynh.net/gcloudhub/latest.json"
+  "updateUrl": "https://active.mrhuynh.net/gcloudhub/v1/app/version"
 }
