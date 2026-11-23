@@ -418,20 +418,24 @@ async function downloadEachSelected(wc) {
   return { count: uniq.length, each: true };
 }
 
-// Tải các thư mục nguồn (theo id) vào hàng chờ chuyển: mở Drive ẩn tại thư mục cha, chọn thư mục rồi tải xuống.
+// Tải các thư mục nguồn (theo id) vào hàng chờ chuyển: dùng MỘT cửa sổ ẩn, đi tới từng thư mục cha,
+// chọn thư mục rồi tải xuống; CHỜ tải xong hẳn mới đóng cửa sổ (không hủy giữa chừng → không gây lỗi "Object destroyed").
 // Người gọi phải bật transfer.setCapture(accId) trước để tệp tải về được đưa vào hàng chờ.
 async function queueFolders(accId, items, sig = null) {
   const acc = store.account(accId);
   if (acc.provider !== 'google') throw new Error('Chỉ hỗ trợ Google Drive');
+  const transfer = require('./transfer');
+  const before = transfer.state().downloading;
+  const win = await hidden(acc, 'https://drive.google.com/drive/my-drive?hl=en');
   let started = 0;
   const errors = [];
-  for (const it of items) {
-    if (sig?.aborted) break;
-    const url = it.parentId
-      ? `https://drive.google.com/drive/folders/${encodeURIComponent(it.parentId)}?hl=en`
-      : 'https://drive.google.com/drive/my-drive?hl=en';
-    const win = await hidden(acc, url);
-    try {
+  try {
+    for (const it of items) {
+      if (sig?.aborted) break;
+      const url = it.parentId
+        ? `https://drive.google.com/drive/folders/${encodeURIComponent(it.parentId)}?hl=en`
+        : 'https://drive.google.com/drive/my-drive?hl=en';
+      try { await win.loadURL(url); } catch {}
       const ok = await waitFor(win, `document.querySelector('[data-id]')`, 30000);
       if (isLoginPage(win)) throw new Error('Phiên đăng nhập đã hết hạn — hãy đăng nhập lại ' + acc.email);
       if (!ok) { errors.push(it.name); continue; }
@@ -442,8 +446,18 @@ async function queueFolders(accId, items, sig = null) {
       if (!picked) { errors.push(it.name); continue; }
       await sleep(500);
       try { await downloadSelectedVisible(win.webContents); started++; } catch (e) { errors.push(it.name); }
-      await sleep(1800);
-    } finally { if (!win.isDestroyed()) win.destroy(); }
+      await sleep(2000);
+    }
+    // CHỜ mọi tệp đang tải (do thao tác này tạo ra) hoàn tất trước khi đóng cửa sổ
+    const end = Date.now() + 30 * 60000;
+    while (!win.isDestroyed() && Date.now() < end) {
+      if (sig?.aborted) break;
+      const d = transfer.state().downloading;
+      if (d <= before) break;
+      await sleep(1000);
+    }
+  } finally {
+    if (!win.isDestroyed()) win.destroy();
   }
   return { started, errors };
 }

@@ -59,12 +59,17 @@ function attachDownloads(ses, accId) {
       queue.push(q);
       downloads.set(dlId, item);
       emitQueue();
-      item.on('updated', () => { q.received = item.getReceivedBytes(); q.size = item.getTotalBytes() || q.size; emitQueue(true); });
+      item.on('updated', () => {
+        try { q.received = item.getReceivedBytes(); q.size = item.getTotalBytes() || q.size; } catch {}
+        emitQueue(true);
+      });
       item.once('done', (ev, state) => {
         downloads.delete(dlId);
+        let total = 0;
+        try { total = item.getTotalBytes(); } catch {}
         if (state === 'completed') {
           q.status = 'ready';
-          q.size = q.received = item.getTotalBytes() || fs.statSync(dest).size;
+          try { q.size = q.received = total || fs.statSync(dest).size; } catch { q.size = q.received = total || q.size; }
         } else {
           const i = queue.indexOf(q);
           if (i >= 0) queue.splice(i, 1);
@@ -75,10 +80,8 @@ function attachDownloads(ses, accId) {
       return;
     }
     emit('download:progress', { id: dlId, name, state: 'progressing', received: 0, total: item.getTotalBytes(), capturing });
-    item.on('updated', () => emit('download:progress', { id: dlId, name, state: 'progressing', received: item.getReceivedBytes(), total: item.getTotalBytes(), capturing }));
-    item.once('done', (ev, state) => {
-      emit('download:progress', { id: dlId, name, state, received: item.getReceivedBytes(), total: item.getTotalBytes(), capturing, path: item.getSavePath() || dest });
-    });
+    item.on('updated', () => { try { emit('download:progress', { id: dlId, name, state: 'progressing', received: item.getReceivedBytes(), total: item.getTotalBytes(), capturing }); } catch {} });
+    item.once('done', (ev, state) => { try { emit('download:progress', { id: dlId, name, state, received: item.getReceivedBytes(), total: item.getTotalBytes(), capturing, path: item.getSavePath() || dest }); } catch {} });
   });
 }
 

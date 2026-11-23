@@ -10,6 +10,10 @@ const updater = require('./updater');
 const pkg = require('../../package.json');
 
 
+// Lớp chống sập: lỗi bất đồng bộ (vd. cửa sổ ẩn bị hủy khi đang tải) chỉ ghi log, không hiện hộp lỗi làm treo app
+process.on('uncaughtException', (e) => { try { console.error('uncaughtException:', e && e.message); } catch {} });
+process.on('unhandledRejection', (e) => { try { console.error('unhandledRejection:', e && (e.message || e)); } catch {} });
+
 app.setAppUserModelId('com.gcloudhub.app');
 // Giảm dấu hiệu tự động hóa để Google cho phép đăng nhập
 app.commandLine.appendSwitch('disable-blink-features', 'AutomationControlled');
