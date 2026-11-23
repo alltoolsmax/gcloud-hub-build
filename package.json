@@ -1,0 +1,81 @@
+{
+  "name": "gcloud-hub",
+  "productName": "GCloud Hub",
+  "version": "1.0.0",
+  "description": "Quản lý nhiều Gmail, Google Drive, Gemini và Google Search trong một ứng dụng",
+  "main": "src/main/main.js",
+  "author": "GCloud Hub",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win portable nsis --x64",
+    "dist:dir": "electron-builder --win dir --x64",
+    "release": "electron-builder --win portable nsis --x64 && node tools/make-latest.js"
+  },
+  "build": {
+    "appId": "com.gcloudhub.app",
+    "productName": "GCloud Hub",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "win": {
+      "icon": "assets/icon.ico",
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "artifactName": "GCloudHub-Setup-${version}.exe",
+      "installerIcon": "assets/icon.ico"
+    },
+    "portable": {
+      "artifactName": "GCloudHub-Portable-${version}.exe"
+    },
+    "mac": {
+      "icon": "assets/icon.icns",
+      "category": "public.app-category.productivity",
+      "identity": null,
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ]
+    },
+    "dmg": {
+      "title": "GCloud Hub",
+      "artifactName": "GCloudHub-${version}-${arch}.dmg"
+    }
+  },
+  "dependencies": {
+    "chart.js": "^4.6.1",
+    "imapflow": "^2.12.2",
+    "mailparser": "^3.15.0",
+    "nodemailer": "^10.6.1"
+  },
+  "devDependencies": {
+    "electron": "^45.4.1",
+    "electron-builder": "^26.18.0"
+  },
+  "updateUrl": "https://mrhuynh.net/gcloudhub/latest.json"
+}
