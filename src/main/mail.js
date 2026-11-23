@@ -273,13 +273,16 @@ function createGoogleAppPassword(accId, parent) {
         clearInterval(timer);
         const pw = m.slice(1).join('');
         if (!win.isDestroyed()) win.destroy();
-        // Không làm mất mật khẩu: luôn trả về để hiển thị cho người dùng, kể cả khi kết nối lỗi
-        try {
-          const info = await configure(accId, { preset: 'gmail', user: acc.email, password: pw });
-          resolve({ ok: true, info, password: pw });
-        } catch (e) {
-          resolve({ ok: false, error: e.message, password: pw });
+        // Google cần vài giây để kích hoạt mật khẩu ứng dụng vừa tạo, nên TỰ ĐỘNG thử kết nối lại
+        // nhiều lần trong nền — người dùng không phải bấm "kết nối lại".
+        // Không làm mất mật khẩu: luôn trả về để hiển thị cho người dùng, kể cả khi kết nối lỗi.
+        let info = null, lastErr = null;
+        for (let attempt = 0; attempt < 8; attempt++) {
+          try { info = await configure(accId, { preset: 'gmail', user: acc.email, password: pw }); lastErr = null; break; }
+          catch (e) { lastErr = e; await new Promise((r) => setTimeout(r, 2500)); }
         }
+        if (!lastErr) resolve({ ok: true, info, password: pw });
+        else resolve({ ok: false, error: lastErr.message, password: pw });
       }
     }, 800);
     win.on('closed', () => { clearInterval(timer); if (!done) reject(new Error('Đã đóng cửa sổ trước khi tạo mật khẩu ứng dụng')); });
