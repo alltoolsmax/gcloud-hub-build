@@ -1,3 +1,8 @@
+// Lớp chống sập đặt TRÊN CÙNG để bắt mọi lỗi, kể cả lỗi lúc nạp module hay lúc khởi động.
+// Lỗi bất đồng bộ (vd. cửa sổ bị hủy) chỉ ghi log, không hiện hộp "A JavaScript error occurred" làm app chết.
+process.on('uncaughtException', (e) => { try { console.error('uncaughtException:', e && (e.stack || e.message || e)); } catch {} });
+process.on('unhandledRejection', (e) => { try { console.error('unhandledRejection:', e && (e.message || e)); } catch {} });
+
 const { app, BrowserWindow, ipcMain, shell, dialog, nativeTheme, Menu, webContents } = require('electron');
 const path = require('path');
 const store = require('./store');
@@ -9,11 +14,6 @@ const mail = require('./mail');
 const updater = require('./updater');
 const pkg = require('../../package.json');
 const ipc = require('./ipc');
-
-
-// Lớp chống sập: lỗi bất đồng bộ (vd. cửa sổ ẩn bị hủy khi đang tải) chỉ ghi log, không hiện hộp lỗi làm treo app
-process.on('uncaughtException', (e) => { try { console.error('uncaughtException:', e && e.message); } catch {} });
-process.on('unhandledRejection', (e) => { try { console.error('unhandledRejection:', e && (e.message || e)); } catch {} });
 
 app.setAppUserModelId('com.gcloudhub.app');
 // Giảm dấu hiệu tự động hóa để Google cho phép đăng nhập
@@ -50,10 +50,21 @@ function createWindow() {
     return { action: 'deny' };
   });
   win.webContents.on('will-navigate', (e, url) => { if (!url.startsWith('file://')) { e.preventDefault(); if (/^https?:/.test(url)) shell.openExternal(url); } });
-  win.once('ready-to-show', () => win.show());
+  // Hiện cửa sổ an toàn: ready-to-show là chính, nhưng có dự phòng để KHÔNG BAO GIỜ kẹt ẩn
+  const reveal = () => { try { if (win && !win.isDestroyed() && !win.isVisible()) win.show(); } catch {} };
+  win.once('ready-to-show', reveal);
+  win.webContents.once('did-finish-load', reveal);
+  win.webContents.on('did-fail-load', reveal); // vẫn hiện để người dùng thấy, không để treo ẩn
+  setTimeout(reveal, 4000); // chốt chặn: trễ mấy cũng phải hiện
 }
 
-app.on('second-instance', () => { if (win) { if (win.isMinimized()) win.restore(); win.focus(); } });
+// Bấm mở app lần nữa → đưa cửa sổ hiện có ra trước (có kiểm tra cửa sổ đã hủy để không bao giờ văng)
+app.on('second-instance', () => {
+  try {
+    if (win && !win.isDestroyed()) { if (win.isMinimized()) win.restore(); win.show(); win.focus(); }
+    else createWindow();
+  } catch {}
+});
 
 // Webview nhúng: chặn cửa sổ bật lên lạ, mở liên kết ngoài bằng trình duyệt hệ thống
 app.on('web-contents-created', (e, contents) => {
@@ -71,13 +82,15 @@ app.on('web-contents-created', (e, contents) => {
 });
 
 app.whenReady().then(() => {
-  app.userAgentFallback = browser.currentUA();
-  // khởi tạo phiên cho mọi tài khoản (gắn trình bắt tải xuống)
-  store.get().accounts.forEach((a) => browser.getSession(a));
-  browser.getSession('persist:search');
-  transfer.schedule();
-  createWindow();
-  setTimeout(() => mail.watchAll(), 3000); // nhận thư mới tức thì
+  // Mở cửa sổ TRƯỚC, các khởi tạo phụ bọc riêng để lỗi của chúng không chặn giao diện
+  try { createWindow(); } catch (e) { console.error('createWindow:', e && e.message); }
+  try {
+    app.userAgentFallback = browser.currentUA();
+    store.get().accounts.forEach((a) => { try { browser.getSession(a); } catch {} }); // gắn trình bắt tải xuống
+    browser.getSession('persist:search');
+    transfer.schedule();
+  } catch (e) { console.error('init:', e && e.message); }
+  setTimeout(() => { try { mail.watchAll(); } catch {} }, 3000); // nhận thư mới tức thì
 });
 
 app.on('window-all-closed', () => app.quit());
