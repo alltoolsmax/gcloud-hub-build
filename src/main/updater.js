@@ -7,6 +7,10 @@ const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
+
+const IS_MAC = process.platform === 'darwin';
+const osKey = () => (IS_MAC ? 'mac' : 'win');
+const archKey = () => (process.arch === 'arm64' ? 'arm64' : 'x64');
 const store = require('./store');
 const pkg = require('../../package.json');
 
@@ -27,7 +31,7 @@ function installId() {
 function endpoint() {
   const u = baseUrl();
   const sep = u.includes('?') ? '&' : '?';
-  return `${u}${sep}os=win&v=${encodeURIComponent(pkg.version)}&iid=${installId()}&t=${Date.now()}`;
+  return `${u}${sep}os=${osKey()}&arch=${archKey()}&v=${encodeURIComponent(pkg.version)}&iid=${installId()}&t=${Date.now()}`;
 }
 
 function emit(ch, p) { require('./ipc').toMain(ch, p); }
@@ -87,9 +91,10 @@ async function download() {
   const m = await fetchInfo();
   if (!m.url) throw new Error('Máy chủ chưa công bố bản cập nhật nào');
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gch-update-'));
-  let name = 'GCloudHub-update.exe';
+  const ext = IS_MAC ? '.dmg' : '.exe';
+  let name = 'GCloudHub-update' + ext;
   try { name = path.basename(new URL(m.url).pathname) || name; } catch {}
-  if (!/\.exe$/i.test(name)) name += '.exe';
+  if (!/\.(exe|dmg)$/i.test(name)) name += ext;
   const file = path.join(dir, name);
   const res = await net.fetch(m.url);
   if (!res.ok || !res.body) throw new Error(`Tải bản cập nhật lỗi ${res.status}`);
@@ -120,11 +125,59 @@ async function download() {
   return { version: m.version, size: got };
 }
 
-// File công bố là BỘ CÀI (Setup). Chạy im lặng rồi tự mở lại ứng dụng — giống Video AI.
+// Windows: file công bố là BỘ CÀI (Setup). Chạy im lặng rồi tự mở lại ứng dụng — giống Video AI.
+// macOS: file công bố là .dmg. Thay bản đang chạy bằng bản mới rồi mở lại; nếu không thay được
+//        (app nằm nơi không ghi được, chưa ký...) thì tự mở .dmg để người dùng kéo thả — không bao giờ kẹt.
 function install() {
   if (!downloaded) throw new Error('Chưa tải bản cập nhật');
-  if (process.platform !== 'win32') throw new Error('Cài đặt cập nhật chỉ hỗ trợ trên Windows');
-  spawn(downloaded.file, ['/S', '--force-run'], { detached: true, stdio: 'ignore' }).unref();
+  if (process.platform === 'win32') {
+    spawn(downloaded.file, ['/S', '--force-run'], { detached: true, stdio: 'ignore' }).unref();
+    setTimeout(() => app.exit(0), 400);
+    return true;
+  }
+  if (IS_MAC) return installMac();
+  throw new Error('Cài đặt cập nhật chỉ hỗ trợ trên Windows và macOS');
+}
+
+// Đường dẫn gói .app đang chạy (…/GCloud Hub.app) suy ra từ file thực thi.
+function appBundlePath() {
+  // execPath = /Applications/GCloud Hub.app/Contents/MacOS/GCloud Hub
+  const exe = process.execPath;
+  const idx = exe.indexOf('.app/');
+  if (idx !== -1) return exe.slice(0, idx + 4); // gồm ".app"
+  return path.resolve(path.dirname(exe), '..', '..'); // dự phòng
+}
+
+function installMac() {
+  const dmg = downloaded.file;
+  const dest = appBundlePath();
+  const sh = path.join(os.tmpdir(), 'gch-update-' + Date.now() + '.sh');
+  // Script chạy tách rời: đợi app thoát → mount .dmg → copy đè → gỡ cờ cách ly → mở lại.
+  // Mọi lỗi đều quay về mở .dmg để người dùng tự kéo vào Applications.
+  const script = `#!/bin/bash
+set -u
+DMG=${JSON.stringify(dmg)}
+DEST=${JSON.stringify(dest)}
+open_dmg(){ /usr/bin/open "$DMG"; exit 0; }
+sleep 2
+PARENT="$(dirname "$DEST")"
+[ -w "$PARENT" ] || open_dmg
+MNT="$(/usr/bin/mktemp -d /tmp/gch-dmg-XXXXXX)"
+/usr/bin/hdiutil attach "$DMG" -nobrowse -noautoopen -mountpoint "$MNT" >/dev/null 2>&1 || open_dmg
+APP="$(/bin/ls "$MNT" | /usr/bin/grep -i '\\.app$' | /usr/bin/head -1)"
+if [ -z "$APP" ]; then /usr/bin/hdiutil detach "$MNT" -force >/dev/null 2>&1; open_dmg; fi
+/bin/rm -rf "$DEST" 2>/dev/null
+if ! /usr/bin/ditto "$MNT/$APP" "$DEST" >/dev/null 2>&1; then
+  /usr/bin/hdiutil detach "$MNT" -force >/dev/null 2>&1
+  open_dmg
+fi
+/usr/bin/xattr -dr com.apple.quarantine "$DEST" >/dev/null 2>&1
+/usr/bin/hdiutil detach "$MNT" -force >/dev/null 2>&1
+/usr/bin/open "$DEST"
+/bin/rm -f ${JSON.stringify(sh)} >/dev/null 2>&1
+`;
+  fs.writeFileSync(sh, script, { mode: 0o755 });
+  spawn('/bin/bash', [sh], { detached: true, stdio: 'ignore' }).unref();
   setTimeout(() => app.exit(0), 400);
   return true;
 }
