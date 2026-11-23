@@ -24,7 +24,7 @@ jobs:
         include:
           - os: windows-latest
             name: win
-          - os: macos-latest
+          - os: macos-15-intel      # Electron build được cả chip Apple lẫn Intel trên máy Intel (máy chip Apple của GitHub hay phải chờ)
             name: mac
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
