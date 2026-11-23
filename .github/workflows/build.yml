@@ -38,7 +38,7 @@ jobs:
       - name: Build Windows
         if: matrix.name == 'win'
         run: |
-          npx electron-builder --win nsis --x64 --publish never -c.win.signAndEditExecutable=true
+          npx electron-builder --win nsis --x64 --publish never
           node tools/make-downloads.js
       - name: Build macOS
         if: matrix.name == 'mac'
