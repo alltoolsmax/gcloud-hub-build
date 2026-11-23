@@ -8,6 +8,14 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+# Bản phát hành tag v<phiên bản>: bản nháp tới khi đủ Windows + macOS, rồi mới công bố (latest).
+# Tệp TÊN CỐ ĐỊNH – link .../releases/latest/download/<tên> không bao giờ đổi:
+#   gcloud_hub_win.zip (khách cài lần đầu) · gcloud_hub_win.exe (tự cập nhật, chỉ tới khách khi bấm Phát hành ở trang quản trị)
+#   gcloud_hub_mac.zip (khách cài lần đầu, 2 bộ cài) · gcloud_hub_mac_apple.dmg / _intel.dmg (máy Mac tự cập nhật)
 jobs:
   build:
     strategy:
@@ -15,10 +23,11 @@ jobs:
       matrix:
         include:
           - os: windows-latest
-            name: Windows
+            name: win
           - os: macos-latest
-            name: macOS
+            name: mac
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -27,32 +36,40 @@ jobs:
       - name: Install dependencies
         run: npm install
       - name: Build Windows
-        if: matrix.os == 'windows-latest'
-        run: npx electron-builder --win nsis portable --x64 --publish never
+        if: matrix.name == 'win'
+        run: |
+          npx electron-builder --win nsis --x64 --publish never -c.win.signAndEditExecutable=true
+          node tools/make-downloads.js
       - name: Build macOS
-        if: matrix.os == 'macos-latest'
-        run: npx electron-builder --mac dmg zip --x64 --arm64 --publish never
+        if: matrix.name == 'mac'
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: GCloudHub-${{ matrix.name }}
-          path: |
-            dist/*.exe
-            dist/*.dmg
-            dist/*.zip
-          if-no-files-found: ignore
-      - name: Publish to Release (latest)
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: latest
-          name: GCloud Hub - bản mới nhất
-          body: |
-            Bản tự động build từ nhánh main.
-            - Windows: GCloudHub-Setup-x.y.z.exe (bộ cài) hoặc GCloudHub-Portable-x.y.z.exe (chạy ngay).
-            - macOS: GCloudHub-x.y.z-arm64.dmg (Apple Silicon) hoặc -x64.dmg (Intel).
-          files: |
-            dist/*.exe
-            dist/*.dmg
-          fail_on_unmatched_files: false
+        run: |
+          npx electron-builder --mac dmg --x64 --arm64 --publish never
+          VER=$(node -p "require('./package.json').version")
+          node tools/make-downloads.js --mac "dist/GCloudHub-$VER-arm64.dmg" "dist/GCloudHub-$VER-x64.dmg"
+      - name: Đưa lên Releases (bản nháp)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VER=$(node -p "require('./package.json').version")
+          TAG="v$VER"
+          gh release view "$TAG" >/dev/null 2>&1 || \
+            gh release create "$TAG" --draft --title "GCloud Hub $TAG" \
+              --notes "Windows: gcloud_hub_win.zip (khách cài lần đầu). macOS: gcloud_hub_mac.zip (2 bộ cài chip Apple M + Intel)." \
+              --target "${{ github.sha }}" || sleep 10
+          if [ "${{ matrix.name }}" = "win" ]; then D=dist/downloads; else D=dist/downloads-mac; fi
+          gh release upload "$TAG" $D/* --clobber
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Công bố bản mới (latest)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VER=$(node -p "require('./package.json').version")
+          gh release edit "v$VER" --draft=false --latest

@@ -10,9 +10,10 @@ where node >nul 2>nul || (echo [LOI] Chua cai Node.js. Tai tai https://nodejs.or
 echo === Cai dat thu vien... ===
 call npm install || (echo [LOI] npm install that bai & pause & exit /b 1)
 echo === Dang build file .exe... ===
-call npx --yes electron-builder --win portable nsis --x64 -c.win.signAndEditExecutable=true || (echo [LOI] Build that bai & pause & exit /b 1)
-call node tools/make-latest.js "" >nul 2>&1
+call npx --yes electron-builder --win nsis --x64 -c.win.signAndEditExecutable=true || (echo [LOI] Build that bai & pause & exit /b 1)
+call node tools/make-downloads.js
 echo.
-echo === XONG! File .exe nam trong: %~dp0dist ===
+echo === XONG! Ban chay thu tren may: %~dp0dist ===
+echo Ban phat hanh: GitHub tu build ^(gcloud-hub-build ^> Releases^), Windows toi khach khi bam Phat hanh o trang quan tri.
 start "" "%~dp0dist"
 pause
