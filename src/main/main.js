@@ -8,6 +8,7 @@ const transfer = require('./transfer');
 const mail = require('./mail');
 const updater = require('./updater');
 const pkg = require('../../package.json');
+const ipc = require('./ipc');
 
 
 // Lớp chống sập: lỗi bất đồng bộ (vd. cửa sổ ẩn bị hủy khi đang tải) chỉ ghi log, không hiện hộp lỗi làm treo app
@@ -40,10 +41,11 @@ function createWindow() {
     },
   });
   Menu.setApplicationMenu(null);
+  ipc.setMain(win);
   win.loadFile(path.join(__dirname, '../renderer/index.html'));
   // Liên kết trong thư: mailto → soạn thư trong ứng dụng, còn lại mở bằng trình duyệt
   win.webContents.setWindowOpenHandler(({ url }) => {
-    if (/^mailto:/i.test(url)) win.webContents.send('mail:mailto', url);
+    if (/^mailto:/i.test(url)) ipc.toMain('mail:mailto', url);
     else if (/^https?:\/\//i.test(url)) shell.openExternal(url);
     return { action: 'deny' };
   });
@@ -186,7 +188,7 @@ const handlers = {
     return r.canceled ? [] : r.filePaths;
   },
   'drive:upload': (accId, wcId, paths, kind) => google.uploadVisible(accId, webContents.fromId(wcId), paths, kind,
-    (p) => win.webContents.send('drive:progress', { accId, ...p })),
+    (p) => ipc.toMain('drive:progress', { accId, ...p })),
   'drive:folderUpload': (wcId, test) => google.folderUploadVisible(webContents.fromId(wcId), { testIntercept: !!test }),
   'drive:folders': (accId, folderId) => require('./drivetree').listFolders(accId, folderId),
   'drive:createFolder': (accId, parentId, name) => require('./drivetree').createFolder(accId, parentId, name),

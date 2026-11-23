@@ -29,7 +29,7 @@ async function googleSystemLogin(acc, loginHint) {
   const r = await syslogin.loginWithSystemBrowser(url, GOOGLE_DONE, {
     // Gmail: "Hộp thư đến (3) - ban@gmail.com - Gmail"; Tài khoản Google: "... - Google Account / Tài khoản Google"
     doneTitle: /([\w.+-]+@[\w-]+(?:\.[\w-]+)+.*\bGmail\b)|(\bGmail\b.*@)|(^(Google Account|Tài khoản Google)\b)/i,
-    onReady: (kind) => require('electron').BrowserWindow.getAllWindows().forEach((w) => w.webContents.send('login:waiting', { kind })),
+    onReady: (kind) => require('./ipc').toMain('login:waiting', { kind }),
   });
   // Phải có cookie đăng nhập Google thật sự
   if (!r.cookies.some((c) => /(^|\.)google\.com$/.test(c.domain.replace(/^\./, '')) && /^(SID|__Secure-1PSID|__Secure-3PSID)$/.test(c.name))) {

@@ -156,7 +156,7 @@ function pruneCache(accId) {
 
 // ---------- Nhận thư mới tức thì (IMAP IDLE) ----------
 const watchers = new Map();
-function emitAll(ch, p) { BrowserWindow.getAllWindows().forEach((w) => !w.isDestroyed() && w.webContents.send(ch, p)); }
+function emitAll(ch, p) { require('./ipc').toMain(ch, p); }
 async function watch(accId) {
   if (watchers.has(accId)) return;
   const st = { stop: false, c: null, delay: 5000 };

@@ -11,7 +11,7 @@ const pkg = require('../../package.json');
 const DEFAULT_URL = pkg.updateUrl || 'https://mrhuynh.net/gcloudhub/latest.json';
 const updateUrl = () => store.get().settings.updateUrl || DEFAULT_URL;
 
-function emit(ch, p) { BrowserWindow.getAllWindows().forEach((w) => !w.isDestroyed() && w.webContents.send(ch, p)); }
+function emit(ch, p) { require('./ipc').toMain(ch, p); }
 
 function cmpVer(a, b) {
   const pa = String(a).replace(/^v/, '').split('.').map((x) => parseInt(x, 10) || 0);

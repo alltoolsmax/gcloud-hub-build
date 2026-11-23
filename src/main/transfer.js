@@ -28,9 +28,8 @@ function staging() {
   return d;
 }
 
-function emit(ch, payload) {
-  BrowserWindow.getAllWindows().forEach((w) => { if (!w.isDestroyed()) w.webContents.send(ch, payload); });
-}
+const { toMain } = require('./ipc');
+function emit(ch, payload) { toMain(ch, payload); }
 
 function uniquePath(dir, name) {
   let p = path.join(dir, name);
