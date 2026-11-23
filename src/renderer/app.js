@@ -1374,6 +1374,7 @@ async function openAbout() {
 window.openAbout = openAbout;
 $('#aboutBtn').onclick = openAbout;
 $('#authorBtn').onclick = openAbout;
+$('#exploreBtn').onclick = () => call('shell:open', 'https://mrhuynh.net/tools');
 
 // ---------------- Khởi động ----------------
 async function loadAccounts() {
