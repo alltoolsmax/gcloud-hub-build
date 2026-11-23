@@ -909,6 +909,8 @@ $('#srcTree').addEventListener('click', (e) => {
   if (!node.classList.contains('root')) expandSrc(node);
 });
 $('#srcReload') && ($('#srcReload').onclick = () => renderSrcTree(true));
+$('#syncDrawerBtn') && ($('#syncDrawerBtn').onclick = () => { $('#syncDrawer').classList.add('open'); renderSrcTree(); });
+$('#syncDrawerClose') && ($('#syncDrawerClose').onclick = () => $('#syncDrawer').classList.remove('open'));
 
 // Di chuyển các thư mục nguồn đã tick sang tài khoản đích
 $('#doMove').onclick = async () => {

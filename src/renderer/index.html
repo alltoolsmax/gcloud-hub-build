@@ -163,10 +163,12 @@
             <button class="btn icon" data-act="back" title="Quay lại"><i data-icon="back"></i></button>
             <button class="btn icon" data-act="reload" title="Tải lại"><i data-icon="refresh"></i></button>
             <div class="title"></div>
+            <button class="btn primary" id="syncDrawerBtn" title="Chọn thư mục để chuyển"><i data-icon="folder"></i>Chọn & chuyển thư mục</button>
           </div>
           <div class="stack" id="syncStack"></div>
         </div>
-        <div class="side-panel">
+        <div class="side-panel sync-drawer" id="syncDrawer">
+          <div class="drawer-head"><b>Chọn thư mục &amp; chuyển</b><button class="btn icon" id="syncDrawerClose"><i data-icon="x"></i></button></div>
           <div class="card">
             <h3><i data-icon="drive"></i>Thư mục ở tài khoản nguồn<span class="grow"></span>
               <button class="btn icon" id="srcReload" title="Tải lại cây thư mục"><i data-icon="refresh"></i></button></h3>
