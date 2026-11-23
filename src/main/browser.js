@@ -6,15 +6,25 @@ const store = require('./store');
 
 // ---- Nhận dạng trình duyệt nhất quán để Google không chặn đăng nhập ----
 // Phiên bản Chrome giả lập = phiên bản trình duyệt thật đã dùng để đăng nhập (nếu có)
-const major = () => String(store.get().settings.uaMajor || process.versions.chrome.split('.')[0]);
+// GHIM nhận dạng trình duyệt MỘT LẦN và giữ cố định mãi — nếu UA đổi theo thời gian,
+// Google coi là "trình duyệt lạ" cho cùng một phiên và bắt đăng nhập lại. Ghim = phiên bền.
+function major() {
+  const s = store.get().settings;
+  if (!s.uaMajor) { s.uaMajor = process.versions.chrome.split('.')[0]; store.save(); }
+  return String(s.uaMajor);
+}
+// Firefox phát hành ~4 tuần/lần: 140 = 24/06/2025. Tính 1 lần rồi GHIM, không để trôi theo ngày.
+function ffVer() {
+  const s = store.get().settings;
+  if (!s.ffVer) { s.ffVer = 140 + Math.max(0, Math.floor((Date.now() - Date.UTC(2025, 5, 24)) / (28 * 864e5))); store.save(); }
+  return s.ffVer;
+}
 const chromeUA = () => `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${major()}.0.0.0 Safari/537.36`;
-// Firefox phát hành ~4 tuần/lần: 140 = 24/06/2025 → tính phiên bản hiện tại để không bị coi là trình duyệt cũ
-const FF_VER = 140 + Math.max(0, Math.floor((Date.now() - Date.UTC(2025, 5, 24)) / (28 * 864e5)));
-const FIREFOX_UA = `Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:${FF_VER}.0) Gecko/20100101 Firefox/${FF_VER}.0`;
+const FIREFOX_UA = () => `Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:${ffVer()}.0) Gecko/20100101 Firefox/${ffVer()}.0`;
 const BRAND = (edge) => `"${edge ? 'Microsoft Edge' : 'Google Chrome'}";v="${major()}", "Chromium";v="${major()}", "Not_A Brand";v="24"`;
 
 function uaFor(kind) {
-  return kind === 'firefox' ? FIREFOX_UA : kind === 'edge' ? `${chromeUA()} Edg/${major()}.0.0.0` : chromeUA();
+  return kind === 'firefox' ? FIREFOX_UA() : kind === 'edge' ? `${chromeUA()} Edg/${major()}.0.0.0` : chromeUA();
 }
 function mode() { return store.get().settings.loginUA || 'firefox'; }
 function currentUA() { return uaFor(mode()); }
@@ -82,6 +92,13 @@ function getSession(acc) {
   return ses;
 }
 
+// Ép ghi toàn bộ cookie của mọi phiên xuống đĩa (giữ phiên đăng nhập qua các lần mở app).
+async function flushCookies() {
+  await Promise.allSettled([...configured].map((p) => {
+    try { return session.fromPartition(p).cookies.flushStore(); } catch { return Promise.resolve(); }
+  }));
+}
+
 // Đổi chế độ nhận dạng: áp dụng ngay cho mọi phiên
 function applyUA() {
   stealthFile();
@@ -131,4 +148,4 @@ function withLock(key, fn) {
   return next;
 }
 
-module.exports = { currentUA, applyUA, getSession, partitionOf, hidden, evalJS, waitFor, sleep, isLoginPage, withLock, uaFor };
+module.exports = { currentUA, applyUA, getSession, partitionOf, hidden, evalJS, waitFor, sleep, isLoginPage, withLock, uaFor, flushCookies };

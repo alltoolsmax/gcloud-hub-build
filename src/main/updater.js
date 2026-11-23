@@ -130,9 +130,10 @@ async function download() {
 //        (app nằm nơi không ghi được, chưa ký...) thì tự mở .dmg để người dùng kéo thả — không bao giờ kẹt.
 function install() {
   if (!downloaded) throw new Error('Chưa tải bản cập nhật');
+  try { require('./browser').flushCookies(); } catch {} // giữ phiên đăng nhập sau khi cập nhật
   if (process.platform === 'win32') {
     spawn(downloaded.file, ['/S', '--force-run'], { detached: true, stdio: 'ignore' }).unref();
-    setTimeout(() => app.exit(0), 400);
+    setTimeout(() => app.exit(0), 600);
     return true;
   }
   if (IS_MAC) return installMac();
@@ -178,7 +179,7 @@ fi
 `;
   fs.writeFileSync(sh, script, { mode: 0o755 });
   spawn('/bin/bash', [sh], { detached: true, stdio: 'ignore' }).unref();
-  setTimeout(() => app.exit(0), 400);
+  setTimeout(() => app.exit(0), 600);
   return true;
 }
 

@@ -91,6 +91,16 @@ app.whenReady().then(() => {
     transfer.schedule();
   } catch (e) { console.error('init:', e && e.message); }
   setTimeout(() => { try { mail.watchAll(); } catch {} }, 3000); // nhận thư mới tức thì
+  // Ép lưu cookie xuống đĩa mỗi 45s để không mất phiên khi app bị thoát đột ngột.
+  setInterval(() => { try { browser.flushCookies(); } catch {} }, 45000);
+});
+
+// Lưu cookie trước khi thoát (giữ phiên đăng nhập cho lần mở sau).
+let _flushed = false;
+app.on('before-quit', (e) => {
+  if (_flushed) return;
+  e.preventDefault(); _flushed = true;
+  Promise.resolve(browser.flushCookies()).catch(() => {}).finally(() => app.quit());
 });
 
 app.on('window-all-closed', () => app.quit());
