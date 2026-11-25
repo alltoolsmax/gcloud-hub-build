@@ -143,7 +143,7 @@ const handlers = {
     }
     const ses = browser.getSession(acc);
     const w = new BrowserWindow({ width: 520, height: 720, parent: win, autoHideMenuBar: true, title: 'Đăng nhập lại — ' + acc.email, webPreferences: { session: ses } });
-    w.webContents.setUserAgent(browser.currentUA());
+    w.webContents.setUserAgent(browser.accountUA(acc));
     const url = acc.provider === 'google'
       ? `https://accounts.google.com/ServiceLogin?Email=${encodeURIComponent(acc.email)}&continue=https%3A%2F%2Fmail.google.com%2Fmail%2Fu%2F0%2F`
       : acc.mailUrl;

@@ -29,6 +29,34 @@ function uaFor(kind) {
 function mode() { return store.get().settings.loginUA || 'firefox'; }
 function currentUA() { return uaFor(mode()); }
 
+// ---- v1.1.10: nhận dạng trình duyệt GHIM THEO TỪNG TÀI KHOẢN ----
+// Trước đây cả ứng dụng dùng chung 1 nhận dạng, đổi mỗi khi thêm / đăng nhập lại BẤT KỲ tài khoản nào (vd. Chrome trên
+// máy vừa lên bản mới) → mọi tài khoản khác đột nhiên "đổi trình duyệt" giữa phiên → Google đăng xuất chúng.
+// Giờ mỗi tài khoản giữ đúng nhận dạng lúc đăng nhập, chỉ đổi khi CHÍNH tài khoản đó đăng nhập lại.
+function idOf(acc) {
+  if (!acc || typeof acc === 'string') return { kind: mode(), major: major(), ff: ffVer() };
+  const a = (() => { try { return store.account(acc.id); } catch { return acc; } })();
+  if (!a.uaPin) { a.uaPin = { kind: mode(), major: major(), ff: ffVer() }; store.save(); }   // tài khoản cũ: ghim 1 lần
+  return a.uaPin;
+}
+function uaOf(id) {
+  const ff = `Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:${id.ff}.0) Gecko/20100101 Firefox/${id.ff}.0`;
+  const ch = `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${id.major}.0.0.0 Safari/537.36`;
+  return id.kind === 'firefox' ? ff : id.kind === 'edge' ? `${ch} Edg/${id.major}.0.0.0` : ch;
+}
+function accountUA(acc) { return uaOf(idOf(acc)); }
+// Ghim nhận dạng mới cho MỘT tài khoản (sau khi chính nó đăng nhập lại) và áp ngay cho phiên của nó
+function pinAccount(acc, kind, maj) {
+  const a = store.account(acc.id);
+  a.uaPin = { kind, major: String(maj || major()), ff: ffVer() };
+  store.save();
+  const p = partitionOf(a);
+  if (configured.has(p)) {
+    session.fromPartition(p).setUserAgent(uaOf(a.uaPin));
+    try { session.fromPartition(p).registerPreloadScript({ type: 'frame', id: 'gch-stealth', filePath: stealthFile(a.uaPin, p) }); } catch (e) {}
+  }
+}
+
 // Mã chạy trong trang trước mọi script của Google: xóa dấu vết "trình duyệt nhúng"
 function stealthMain(m, ver) {
   try {
@@ -50,24 +78,25 @@ function stealthMain(m, ver) {
   } catch (e) {}
 }
 
-function stealthFile() {
-  const f = path.join(app.getPath('userData'), 'stealth-preload.js');
+function stealthFile(id = { kind: mode(), major: major() }, p = '') {
+  const tag = p ? '-' + p.replace(/[^\w-]/g, '_') : '';
+  const f = path.join(app.getPath('userData'), `stealth-preload${tag}.js`);
   const code = `const { contextBridge } = require('electron');
-try { contextBridge.executeInMainWorld({ func: ${stealthMain.toString()}, args: [${JSON.stringify(mode())}, ${JSON.stringify(major())}] }); } catch (e) {}`;
+try { contextBridge.executeInMainWorld({ func: ${stealthMain.toString()}, args: [${JSON.stringify(id.kind)}, ${JSON.stringify(String(id.major))}] }); } catch (e) {}`;
   fs.mkdirSync(path.dirname(f), { recursive: true });
   fs.writeFileSync(f, code);
   return f;
 }
 
-function fixHeaders(h) {
-  const m = mode();
+function fixHeaders(h, id = { kind: mode(), major: major(), ff: ffVer() }) {
+  const m = id.kind;
   for (const k of Object.keys(h)) {
     if (k.toLowerCase() === 'user-agent') delete h[k];
     if (/^sec-ch-ua/i.test(k)) delete h[k];
   }
-  h['User-Agent'] = uaFor(m);
+  h['User-Agent'] = uaOf(id);
   if (m !== 'firefox') {
-    h['sec-ch-ua'] = BRAND(m === 'edge');
+    h['sec-ch-ua'] = `"${m === 'edge' ? 'Microsoft Edge' : 'Google Chrome'}";v="${id.major}", "Chromium";v="${id.major}", "Not_A Brand";v="24"`;
     h['sec-ch-ua-mobile'] = '?0';
     h['sec-ch-ua-platform'] = '"Windows"';
   }
@@ -82,10 +111,11 @@ function getSession(acc) {
   const ses = session.fromPartition(p);
   if (!configured.has(p)) {
     configured.add(p);
-    ses.setUserAgent(currentUA());
-    try { ses.registerPreloadScript({ type: 'frame', id: 'gch-stealth', filePath: stealthFile() }); } catch (e) {}
-    // Header nhất quán với nhận dạng trình duyệt (User-Agent + Client Hints)
-    ses.webRequest.onBeforeSendHeaders((d, cb) => cb({ requestHeaders: fixHeaders(d.requestHeaders) }));
+    const own = typeof acc !== 'string';
+    ses.setUserAgent(accountUA(acc));
+    try { ses.registerPreloadScript({ type: 'frame', id: 'gch-stealth', filePath: own ? stealthFile(idOf(acc), p) : stealthFile() }); } catch (e) {}
+    // Header nhất quán với nhận dạng ĐÃ GHIM của tài khoản (User-Agent + Client Hints) – đọc lại mỗi lần, đổi khi ghim lại
+    ses.webRequest.onBeforeSendHeaders((d, cb) => cb({ requestHeaders: fixHeaders(d.requestHeaders, own ? idOf(acc) : undefined) }));
     ses.setPermissionRequestHandler((wc, perm, cb) => cb(['notifications', 'clipboard-read', 'clipboard-sanitized-write', 'media', 'fullscreen'].includes(perm)));
     require('./transfer').attachDownloads(ses, typeof acc === 'string' ? null : acc.id);
   }
@@ -99,10 +129,11 @@ async function flushCookies() {
   }));
 }
 
-// Đổi chế độ nhận dạng: áp dụng ngay cho mọi phiên
+// Đổi chế độ nhận dạng mặc định: CHỈ áp cho tài khoản thêm SAU này và phiên tìm kiếm chung.
+// Tài khoản đã đăng nhập giữ nguyên nhận dạng đã ghim (đổi giữa phiên = Google đăng xuất).
 function applyUA() {
   stealthFile();
-  for (const p of configured) session.fromPartition(p).setUserAgent(currentUA());
+  for (const p of configured) if (!p.startsWith('persist:acc-')) session.fromPartition(p).setUserAgent(currentUA());
   app.userAgentFallback = currentUA();
 }
 
@@ -148,4 +179,4 @@ function withLock(key, fn) {
   return next;
 }
 
-module.exports = { currentUA, applyUA, getSession, partitionOf, hidden, evalJS, waitFor, sleep, isLoginPage, withLock, uaFor, flushCookies };
+module.exports = { currentUA, accountUA, pinAccount, applyUA, getSession, partitionOf, hidden, evalJS, waitFor, sleep, isLoginPage, withLock, uaFor, flushCookies };

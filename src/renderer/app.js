@@ -89,7 +89,7 @@ function ensureWeb(stackId, account, url, key) {
     wv.dataset.key = key;
     wv.dataset.home = url;
     wv.setAttribute('partition', account ? account.partition : 'persist:search');
-    wv.setAttribute('useragent', S.ua);
+    wv.setAttribute('useragent', (account && account.ua) || S.ua);   // nhận dạng đã ghim của đúng tài khoản
     wv.setAttribute('allowpopups', '');
     wv.setAttribute('src', url);
     const bar = stack.querySelector('.loading-bar') || stack.appendChild(Object.assign(document.createElement('div'), { className: 'loading-bar' }));

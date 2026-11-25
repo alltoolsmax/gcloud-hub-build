@@ -2,7 +2,7 @@
 const { BrowserWindow, session } = require('electron');
 const crypto = require('crypto');
 const store = require('./store');
-const { getSession, currentUA, partitionOf, sleep, applyUA, hidden, evalJS } = require('./browser');
+const { getSession, currentUA, accountUA, pinAccount, partitionOf, sleep, applyUA, hidden, evalJS } = require('./browser');
 const syslogin = require('./syslogin');
 
 const GOOGLE_DONE = (u) => /^https:\/\/(mail\.google\.com\/mail|myaccount\.google\.com)/.test(u);
@@ -35,11 +35,11 @@ async function googleSystemLogin(acc, loginHint) {
   if (!r.cookies.some((c) => /(^|\.)google\.com$/.test(c.domain.replace(/^\./, '')) && /^(SID|__Secure-1PSID|__Secure-3PSID)$/.test(c.name))) {
     throw new Error('Chưa đăng nhập Google trong cửa sổ trình duyệt — hãy thử lại và chỉ đóng cửa sổ sau khi đã đăng nhập xong');
   }
-  const st = store.get().settings;
-  st.loginUA = r.browser.kind === 'edge' ? 'edge' : 'chrome';
-  if (r.browser.major) st.uaMajor = r.browser.major;
-  store.save();
-  applyUA();
+  // Ghim nhận dạng = đúng trình duyệt vừa đăng nhập, CHỈ cho tài khoản này (không đụng tài khoản khác)
+  const kind = r.browser.kind === 'edge' ? 'edge' : 'chrome';
+  const maj = r.browser.major || process.versions.chrome.split('.')[0];
+  acc.uaPin = { kind, major: String(maj), ff: store.get().settings.ffVer || 140 };
+  if (store.get().accounts.some((a) => a.id === acc.id)) pinAccount(acc, kind, maj);
   const ses = getSession(acc);
   await ses.clearStorageData({ storages: ['cookies'] });
   await syslogin.importCookies(ses, r.cookies, (c) => /(^|\.)(google|youtube|gstatic|googleusercontent|gmail)\.[a-z.]+$/.test(c.domain.replace(/^\./, '')));
@@ -75,6 +75,7 @@ const PROVIDERS = {
 
 function pub(a) {
   return { id: a.id, provider: a.provider, email: a.email, name: a.name, color: a.color, mailUrl: a.mailUrl, partition: partitionOf(a),
+    ua: a.provider === 'imap' ? null : accountUA(a),
     mail: a.mail ? { configured: true, preset: a.mail.preset } : { configured: false } };
 }
 
@@ -131,7 +132,7 @@ function add({ provider = 'google', email = '', name = '', url = '' }, parent) {
     mailUrl: provider === 'custom' ? url : prov.mailUrl,
   };
   const ses = getSession(acc);
-  const ua = currentUA();
+  const ua = accountUA(acc);
 
   return new Promise((resolve, reject) => {
     const win = new BrowserWindow({
