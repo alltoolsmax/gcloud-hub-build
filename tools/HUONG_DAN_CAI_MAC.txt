@@ -1,0 +1,22 @@
+HƯỚNG DẪN CÀI GCLOUD HUB TRÊN MÁY MAC
+=====================================
+
+1. Chọn đúng bộ cài theo chip máy (Táo › Giới thiệu về máy Mac › dòng "Chip" hoặc "Bộ xử lý"):
+   - Chip Apple M1 / M2 / M3 / M4 ...  → mở  gcloud_hub_mac_apple.dmg
+   - Intel                              → mở  gcloud_hub_mac_intel.dmg
+
+2. Trong cửa sổ vừa mở, kéo biểu tượng GCloud Hub vào thư mục Applications.
+   (Máy đã có bản cũ: chọn "Thay thế".)
+
+3. Mở GCloud Hub trong thư mục Applications.
+   Lần ĐẦU TIÊN, máy Mac sẽ báo "GCloud Hub bị chặn để bảo vệ máy Mac" – bấm Xong, rồi:
+   a. Mở  Cài đặt hệ thống › Quyền riêng tư & Bảo mật  (System Settings › Privacy & Security).
+   b. Kéo xuống phần Bảo mật (Security): ở dòng "GCloud Hub.app đã bị chặn..." bấm  Vẫn mở  (Open Anyway).
+   c. Nhập mật khẩu máy (hoặc Touch ID), rồi bấm  Mở  (Open).
+
+   Chỉ cần làm 1 lần. Những lần sau GCloud Hub mở bình thường và tự cập nhật bản mới.
+
+Vì sao phải làm bước 3? GCloud Hub chưa có chứng chỉ nhà phát triển của Apple (trả phí), nên máy Mac
+yêu cầu bạn tự xác nhận cho phép mở ở lần đầu. Ứng dụng không bị lỗi.
+
+Cần hỗ trợ: liên hệ Mr. Huỳnh.

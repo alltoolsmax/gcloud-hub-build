@@ -83,7 +83,11 @@ function mac(arm, x64) {
     fs.copyFileSync(src, dst);
     info[chip] = { file: name, sha256: sha256(dst), size: fs.statSync(dst).size };
   }
-  zipStore(path.join(out, 'gcloud_hub_mac.zip'), ['gcloud_hub_mac_apple.dmg', 'gcloud_hub_mac_intel.dmg'].map((n) => [n, path.join(out, n)]));
+  // Kèm hướng dẫn cài (lần đầu macOS chặn ứng dụng chưa có chứng chỉ Apple → Quyền riêng tư & Bảo mật › Vẫn mở)
+  zipStore(path.join(out, 'gcloud_hub_mac.zip'), [
+    ['HUONG_DAN_CAI_MAC.txt', path.join(__dirname, 'HUONG_DAN_CAI_MAC.txt')],
+    ...['gcloud_hub_mac_apple.dmg', 'gcloud_hub_mac_intel.dmg'].map((n) => [n, path.join(out, n)]),
+  ]);
   info.zip = 'gcloud_hub_mac.zip'; info.zip_size = fs.statSync(path.join(out, 'gcloud_hub_mac.zip')).size;
   fs.writeFileSync(path.join(out, 'gcloud_mac.json'), JSON.stringify(info, null, 1));
   console.log('Đã tạo ' + out + ': ' + fs.readdirSync(out).join(', '));
