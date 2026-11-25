@@ -187,6 +187,7 @@ async function refreshInbox(id, notify = true) {
     }
     if (a.provider !== 'google') return;
     const r = await call('mail:inbox', id);
+    if (r.temp) return;                     // lỗi tạm (mạng / Google bận): giữ nguyên trạng thái, không báo hết phiên
     st.expired = !!r.expired;
     if (!r.expired) { st.unread = r.unread; st.entries = r.entries; }
   } catch (err) { st.mailErr = err.message; console.warn(err); }

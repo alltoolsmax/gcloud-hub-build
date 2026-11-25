@@ -17,17 +17,88 @@ function decode(s = '') {
   return s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
 }
 
+// ---------------- Giữ phiên đăng nhập ----------------
+// Trình duyệt bình thường giữ phiên Google bằng cách thỉnh thoảng mở trang Google: chính trang đó làm mới cookie phiên.
+// Ứng dụng chỉ đọc thư ngầm (không mở trang) nên phiên không được làm mới → lâu dần hết hạn. keepAlive mở 1 trang
+// Google nhẹ trong cửa sổ ẩn của đúng tài khoản ~15 giây (như người dùng mở tab), rồi lưu cookie xuống đĩa.
+const ALIVE_EVERY = 45 * 60e3;
+const lastAlive = new Map();
+const LOGIN_COOKIES = /^(SID|__Secure-1PSID|__Secure-3PSID)$/;
+
+async function hasLoginCookie(ses) {
+  try {
+    const cks = await ses.cookies.get({ domain: 'google.com' });
+    const now = Date.now() / 1000;
+    return cks.some((c) => LOGIN_COOKIES.test(c.name) && (!c.expirationDate || c.expirationDate > now));
+  } catch { return true; }               // không đọc được cookie → không kết luận hết phiên
+}
+
+function keepAlive(accId, { force = false } = {}) {
+  const acc = store.account(accId);
+  if (acc.provider !== 'google') return Promise.resolve(false);
+  if (!force && Date.now() - (lastAlive.get(accId) || 0) < ALIVE_EVERY) return Promise.resolve(true);
+  lastAlive.set(accId, Date.now());
+  return withLock('alive:' + accId, async () => {
+    let w = null;
+    try {
+      w = await hidden(acc, 'https://myaccount.google.com/?hl=vi', { width: 1100, height: 800 });
+      await sleep(15000);                 // để trang Google tự làm mới phiên
+      const ok = !isLoginPage(w);
+      await getSession(acc).cookies.flushStore().catch(() => {});
+      return ok;
+    } catch { return true; } finally { if (w && !w.isDestroyed()) w.destroy(); }
+  });
+}
+
+// Lấy Atom feed, đi theo chuyển hướng KHÔNG phải trang đăng nhập.
+// Kết quả: {xml} | {login: true} (Google đòi đăng nhập) | {temp: '...'} (lỗi tạm: mạng / Google bận)
+async function fetchFeed(ses) {
+  let url = 'https://mail.google.com/mail/u/0/feed/atom';
+  for (let i = 0; i < 4; i++) {
+    let r;
+    try { r = await ses.fetch(url, { credentials: 'include', redirect: 'manual' }); } catch (e) { return { temp: 'mạng: ' + (e.message || e) }; }
+    if (r.status >= 300 && r.status < 400) {
+      const loc = r.headers.get('location') || '';
+      if (!loc) return { temp: 'chuyển hướng trống' };
+      if (/accounts\.google\.com|ServiceLogin|signin/i.test(loc)) return { login: true, why: 'Google chuyển sang trang đăng nhập' };
+      url = new URL(loc, url).toString();
+      continue;
+    }
+    if (r.status === 401 || r.status === 403) return { login: true, why: 'Google từ chối (' + r.status + ')' };
+    if (r.status >= 400) return { temp: 'Google trả lỗi ' + r.status };
+    const xml = await r.text();
+    if (xml.includes('<feed')) return { xml };
+    if (/accounts\.google\.com|ServiceLogin/i.test(xml)) return { login: true, why: 'Google hiện trang đăng nhập' };
+    return { temp: 'nội dung lạ' };
+  }
+  return { temp: 'chuyển hướng quá nhiều' };
+}
+
 // ---------------- Thư chưa đọc ----------------
 async function inbox(accId) {
   const acc = store.account(accId);
   if (acc.provider !== 'google') return { supported: false, unread: null, entries: [] };
   const ses = getSession(acc);
-  const r = await ses.fetch('https://mail.google.com/mail/u/0/feed/atom', { credentials: 'include', redirect: 'manual' });
-  if (r.status === 401 || r.status >= 300) {
-    return { supported: true, expired: true, unread: null, entries: [] };
+  keepAlive(accId).catch(() => {});                 // làm mới phiên định kỳ (chạy nền, tối đa 45 phút/lần)
+  let f = await fetchFeed(ses);
+  if (f.login) {
+    // Trước khi báo hết phiên: mở trang Google để phiên tự làm mới, rồi kiểm tra lại 1 lần
+    await keepAlive(accId, { force: true }).catch(() => {});
+    f = await fetchFeed(ses);
+    if (f.login && !(await hasLoginCookie(ses))) {
+      console.warn('[phiên]', acc.email, 'hết phiên thật:', f.why, '· không còn cookie đăng nhập');
+      return { supported: true, expired: true, why: f.why, unread: null, entries: [] };
+    }
+    if (f.login) {
+      console.warn('[phiên]', acc.email, f.why, '· vẫn còn cookie đăng nhập → báo hết phiên');
+      return { supported: true, expired: true, why: f.why, unread: null, entries: [] };
+    }
   }
-  const xml = await r.text();
-  if (!xml.includes('<feed')) return { supported: true, expired: true, unread: null, entries: [] };
+  if (f.temp) {
+    console.warn('[phiên]', acc.email, 'lỗi tạm khi đọc thư:', f.temp, '→ KHÔNG coi là hết phiên');
+    return { supported: true, temp: true, why: f.temp, unread: null, entries: [] };
+  }
+  const xml = f.xml;
   const unread = +(xml.match(/<fullcount>(\d+)<\/fullcount>/)?.[1] || 0);
   const entries = [...xml.matchAll(/<entry>([\s\S]*?)<\/entry>/g)].map(([, e]) => {
     const g = (tag) => decode(e.match(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`))?.[1] || '');
@@ -485,4 +556,4 @@ async function newFolderVisible(wc, name) {
   return true;
 }
 
-module.exports = { queueFolders, downloadEachSelected, downloadSelectedVisible, folderUploadVisible, uploadVisible, newFolderVisible, uploadToPhotos, inbox, storage, send, uploadToDrive, parseStorage, driveFolderUrl };
+module.exports = { keepAlive, queueFolders, downloadEachSelected, downloadSelectedVisible, folderUploadVisible, uploadVisible, newFolderVisible, uploadToPhotos, inbox, storage, send, uploadToDrive, parseStorage, driveFolderUrl };

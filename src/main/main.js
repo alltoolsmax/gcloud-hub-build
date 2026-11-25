@@ -93,6 +93,11 @@ app.whenReady().then(() => {
   setTimeout(() => { try { mail.watchAll(); } catch {} }, 3000); // nhận thư mới tức thì
   // Ép lưu cookie xuống đĩa mỗi 45s để không mất phiên khi app bị thoát đột ngột.
   setInterval(() => { try { browser.flushCookies(); } catch {} }, 45000);
+  // Giữ phiên Google: mở trang Google ẩn cho từng tài khoản lúc khởi động (cách nhau 20 giây) và mỗi 45 phút
+  const aliveAll = () => store.get().accounts.filter((a) => a.provider === 'google')
+    .forEach((a, i) => setTimeout(() => { google.keepAlive(a.id).catch(() => {}); }, 20000 + i * 20000));
+  setTimeout(aliveAll, 10000);
+  setInterval(aliveAll, 45 * 60e3);
 });
 
 // Lưu cookie trước khi thoát (giữ phiên đăng nhập cho lần mở sau).
