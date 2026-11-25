@@ -1,7 +1,7 @@
 {
   "name": "gcloud-hub",
   "productName": "GCloud Hub",
-  "version": "1.1.10",
+  "version": "1.1.11",
   "description": "Quản lý nhiều Gmail, Google Drive, Gemini và Google Search trong một ứng dụng",
   "main": "src/main/main.js",
   "author": "GCloud Hub",
@@ -47,6 +47,7 @@
       "icon": "assets/icon.icns",
       "category": "public.app-category.productivity",
       "identity": null,
+      "hardenedRuntime": false,
       "target": [
         {
           "target": "dmg",
@@ -67,7 +68,8 @@
     "dmg": {
       "title": "GCloud Hub",
       "artifactName": "GCloudHub-${version}-${arch}.dmg"
-    }
+    },
+    "afterSign": "build/adhoc-sign.js"
   },
   "dependencies": {
     "chart.js": "^4.6.1",

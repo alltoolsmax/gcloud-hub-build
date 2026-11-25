@@ -46,6 +46,13 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
         run: |
           npx electron-builder --mac dmg --x64 --arm64 --publish never
+          # Kiểm tra: cả 2 bản đều đã ký (không ký → máy Mac báo "bị hỏng") và đúng loại chip
+          for APP in dist/mac/*.app dist/mac-arm64/*.app; do
+            codesign --verify --deep --strict "$APP"
+            file "$APP/Contents/MacOS/"*
+          done
+          file dist/mac-arm64/*.app/Contents/MacOS/* | grep -q arm64
+          file dist/mac/*.app/Contents/MacOS/* | grep -q x86_64
           VER=$(node -p "require('./package.json').version")
           node tools/make-downloads.js --mac "dist/GCloudHub-$VER-arm64.dmg" "dist/GCloudHub-$VER-x64.dmg"
       - name: Đưa lên Releases (bản nháp)
