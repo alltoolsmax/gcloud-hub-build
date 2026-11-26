@@ -142,6 +142,13 @@ const handlers = {
       return true;
     }
     const ses = browser.getSession(acc);
+    if (acc.provider === 'google') {
+      // v1.1.12 – đăng nhập TRONG ỨNG DỤNG: bỏ phiên cũ chép từ Chrome (Google đã gắn phiên đó vào Chrome nên không
+      // làm mới được) và dùng nhận dạng đăng nhập đang chọn trong Cài đặt, để phiên mới thuộc hẳn về ứng dụng.
+      await ses.clearStorageData({ storages: ['cookies', 'localstorage', 'indexdb', 'serviceworkers', 'cachestorage'] }).catch(() => {});
+      const st = store.get().settings;
+      browser.pinAccount(acc, st.loginUA || 'firefox', st.uaMajor);
+    }
     const w = new BrowserWindow({ width: 520, height: 720, parent: win, autoHideMenuBar: true, title: 'Đăng nhập lại — ' + acc.email, webPreferences: { session: ses } });
     w.webContents.setUserAgent(browser.accountUA(acc));
     const url = acc.provider === 'google'

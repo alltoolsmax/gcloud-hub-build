@@ -1148,6 +1148,8 @@ async function renderSettings() {
   </div>
   <div class="card">
     <h3>${icon('login')}Đăng nhập</h3>
+    <div class="set-row"><div class="t">Cách đăng nhập tài khoản Google<small>"Chrome trên máy": đăng nhập bằng Chrome rồi chép phiên sang – Chrome mới có thể gắn phiên vào máy khiến Drive / Photos đòi đăng nhập lại. "Trong ứng dụng": đăng nhập ngay trong GCloud Hub, phiên thuộc hẳn về ứng dụng. Đổi xong bấm "Đăng nhập lại" từng tài khoản.</small></div>
+      <select id="setLoginMethod"><option value="system">Chrome trên máy</option><option value="embedded">Trong ứng dụng</option></select></div>
     <div class="set-row"><div class="t">Nhận dạng trình duyệt khi đăng nhập<small>Nếu Google báo "This browser or app may not be secure", hãy đổi sang chế độ khác rồi bấm Thêm tài khoản lại.</small></div>
       <select id="setUA"><option value="firefox">Firefox (khuyên dùng)</option><option value="chrome">Chrome</option><option value="edge">Edge</option></select></div>
     <div class="set-row"><div class="t">Thư mục lưu tệp tải về<small id="dlDirTxt">${esc(st.downloadDir || 'Mặc định: thư mục Downloads của Windows')}</small></div>
@@ -1179,6 +1181,13 @@ async function renderSettings() {
   </div>`;
   $('#setTheme').value = st.theme || 'dark';
   $('#setUA').value = st.loginUA || 'firefox';
+  $('#setLoginMethod').value = st.loginMethod === 'embedded' ? 'embedded' : 'system';
+  $('#setLoginMethod').onchange = async (e) => {
+    S.settings = await call('settings:set', { loginMethod: e.target.value });
+    toast(e.target.value === 'embedded'
+      ? 'Đã chuyển sang đăng nhập trong ứng dụng. Bấm "Đăng nhập lại" ở từng tài khoản Google để áp dụng.'
+      : 'Đã chuyển sang đăng nhập bằng Chrome trên máy.', 'ok');
+  };
   $('#setTheme').onchange = async (e) => { S.settings = await call('settings:set', { theme: e.target.value }); document.documentElement.dataset.theme = e.target.value; };
   $('#setUA').onchange = async (e) => {
     S.settings = await call('settings:set', { loginUA: e.target.value });
@@ -1215,6 +1224,7 @@ async function relogin(id) {
   try { await call('accounts:relogin', id); }
   catch (e) { toast(esc(e.message), 'err'); return; }
   finally { closeLoginWait(); }
+  S.accounts = await call('accounts:list');      // nhận dạng của tài khoản có thể vừa đổi
   dropWebviews(id);
   await refreshInbox(id, false);
   await refreshStorage(id);
